@@ -1,0 +1,52 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {"major": 3, "minor": 22, "patch": 0},
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {"BUILD_TESTING": "ON"}
+    },
+    {
+      "name": "system",
+      "displayName": "System dependencies (Debug)",
+      "description": "Use GLFW, Dear ImGui and libssh2 already installed on the system",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/system",
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug"}
+    },
+    {
+      "name": "release",
+      "displayName": "System dependencies (Release)",
+      "description": "Same dependency search as 'system', built with optimizations",
+      "inherits": ["base", "system"],
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}
+    },
+    {
+      "name": "bundled",
+      "displayName": "Bundled dependencies (Release)",
+      "description": "Fetch and build pinned GLFW, Dear ImGui, libssh2 and libvterm with FetchContent",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/bundled",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "MRC_BUNDLED_GLFW": "ON",
+        "MRC_BUNDLED_IMGUI": "ON",
+        "MRC_BUNDLED_SSH2": "ON",
+        "MRC_BUNDLED_VTERM": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {"name": "system", "configurePreset": "system"},
+    {"name": "release", "configurePreset": "release"},
+    {"name": "bundled", "configurePreset": "bundled"}
+  ],
+  "testPresets": [
+    {"name": "system", "configurePreset": "system", "output": {"outputOnFailure": true}},
+    {"name": "release", "configurePreset": "release", "output": {"outputOnFailure": true}},
+    {"name": "bundled", "configurePreset": "bundled", "output": {"outputOnFailure": true}}
+  ]
+}

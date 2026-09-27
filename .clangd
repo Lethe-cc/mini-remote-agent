@@ -1,0 +1,11 @@
+# clangd needs the compile commands CMake exports; without them it parses this
+# project without -std=c++20 and without the imgui/libvterm include paths, which
+# produces a cascade of false errors (std::jthread, std::filesystem, ImFont...).
+#
+# This workspace is reachable through two spellings: /Users/marvin/workspace is a
+# symlink to /Volumes/workspace. A build directory records whichever spelling CMake
+# was invoked with, and FetchContent stamps keep that spelling even after a
+# reconfigure, so a directory can end up with mixed -I paths that clangd cannot
+# match. Always run cmake, your editor and clangd from the same path.
+CompileFlags:
+  CompilationDatabase: build/system

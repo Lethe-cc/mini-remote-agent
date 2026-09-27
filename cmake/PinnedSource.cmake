@@ -1,0 +1,108 @@
+# Shared helper for the pinned third-party tarballs used by the *.cmake modules.
+#
+# Every dependency is fetched with FetchContent from a fixed URL and checked
+# against a SHA-256 digest. If a tarball with the expected digest already exists
+# in MRC_LOCAL_DEPS_DIR it is used instead of the network, which makes offline
+# and air-gapped builds possible without a package manager.
+include_guard(GLOBAL)
+
+include(FetchContent)
+
+if(POLICY CMP0135)
+  cmake_policy(SET CMP0135 NEW)
+endif()
+
+set(MRC_LOCAL_DEPS_DIR "${PROJECT_SOURCE_DIR}/build-deps" CACHE PATH
+  "Directory holding pre-downloaded dependency tarballs. A file is only reused when its SHA-256 digest matches the pinned one.")
+
+# mrc_dependency_url(<out-var> NAME <n> VERSION <v> URL <u> SHA256 <digest>)
+function(mrc_dependency_url out)
+  cmake_parse_arguments(D "" "NAME;VERSION;URL;SHA256" "" ${ARGN})
+  if(NOT D_NAME OR NOT D_VERSION OR NOT D_URL)
+    message(FATAL_ERROR "mrc_dependency_url: NAME, VERSION and URL are required")
+  endif()
+  set(_url "${D_URL}")
+  string(TOLOWER "${D_SHA256}" _want)
+  set(_local "${MRC_LOCAL_DEPS_DIR}/${D_NAME}-${D_VERSION}.tar.gz")
+  if(_want AND EXISTS "${_local}")
+    file(SHA256 "${_local}" _have)
+    string(TOLOWER "${_have}" _have)
+    if(_have STREQUAL _want)
+      get_filename_component(_local "${_local}" ABSOLUTE)
+      set(_url "file://${_local}")
+      message(STATUS "${D_NAME} ${D_VERSION}: using verified local tarball ${_local}")
+    else()
+      message(STATUS "${D_NAME} ${D_VERSION}: local tarball digest ${_have} does not match ${_want}, downloading")
+    endif()
+  endif()
+  set(${out} "${_url}" PARENT_SCOPE)
+endfunction()
+
+# mrc_fetch_populate(<name> [KEY=VALUE ...])
+# Some pinned projects declare a cmake_minimum_required old enough that their
+# option() calls ignore directory variables, so their switches are forced through
+# the cache. The previous cache state is restored afterwards, which keeps this
+# project's own options - BUILD_TESTING in particular - unaffected.
+function(mrc_fetch_populate name)
+  set(_saved_keys "")
+  set(_saved_types "")
+  set(_saved_docs "")
+  set(_saved_values "")
+  set(_injected "")
+  foreach(_pair IN LISTS ARGN)
+    string(FIND "${_pair}" "=" _eq)
+    if(_eq LESS 1)
+      message(FATAL_ERROR "mrc_fetch_populate: expected KEY=VALUE, got '${_pair}'")
+    endif()
+    string(SUBSTRING "${_pair}" 0 "${_eq}" _key)
+    math(EXPR _value_start "${_eq} + 1")
+    string(SUBSTRING "${_pair}" "${_value_start}" -1 _value)
+    if(_value MATCHES "^(ON|OFF|TRUE|FALSE|YES|NO|1|0)$")
+      set(_type "BOOL")
+    else()
+      set(_type "STRING")
+    endif()
+    if(DEFINED CACHE{${_key}})
+      get_property(_doc CACHE "${_key}" PROPERTY HELPSTRING)
+      list(APPEND _saved_keys "${_key}")
+      list(APPEND _saved_types "${_type}")
+      list(APPEND _saved_docs "${_doc}")
+      list(APPEND _saved_values "$CACHE{${_key}}")
+    else()
+      set(_doc "Set by the ${name} dependency build")
+      list(APPEND _injected "${_key}")
+    endif()
+    set(${_key} "${_value}" CACHE "${_type}" "${_doc}" FORCE)
+  endforeach()
+
+  FetchContent_MakeAvailable(${name})
+
+  list(LENGTH _saved_keys _count)
+  math(EXPR _last "${_count} - 1")
+  foreach(_index RANGE 0 ${_last})
+    list(GET _saved_keys ${_index} _key)
+    list(GET _saved_types ${_index} _type)
+    list(GET _saved_docs ${_index} _doc)
+    list(GET _saved_values ${_index} _value)
+    set(${_key} "${_value}" CACHE "${_type}" "${_doc}" FORCE)
+  endforeach()
+  foreach(_key IN LISTS _injected)
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.26)
+      unset(CACHE{${_key}})
+    else()
+      set(${_key} "" CACHE INTERNAL "" FORCE)
+    endif()
+  endforeach()
+endfunction()
+
+# mrc_dependency_hash(<out-var> NAME <n> SHA256 <digest>)
+# Keeps verification optional so MRC_<DEP>_VERSION can be raised locally.
+function(mrc_dependency_hash out)
+  cmake_parse_arguments(D "" "NAME;SHA256" "" ${ARGN})
+  if(D_SHA256)
+    set(${out} "URL_HASH" "SHA256=${D_SHA256}" PARENT_SCOPE)
+  else()
+    message(STATUS "${D_NAME}: digest not pinned, URL_HASH check disabled")
+    set(${out} "" PARENT_SCOPE)
+  endif()
+endfunction()

@@ -1,0 +1,5 @@
+/build*/
+/.cache/
+imgui.ini
+build/
+.vscode/

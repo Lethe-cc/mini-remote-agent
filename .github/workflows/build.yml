@@ -1,0 +1,30 @@
+---
+name: Desktop build
+
+"on": [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+        preset: [system, bundled]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Prerequisites
+        run: "brew install cmake ninja perl pkg-config openssl@3"
+      - name: Configure
+        run: "cmake --preset ${{ matrix.preset }}"
+      - name: Build
+        run: "cmake --build --preset ${{ matrix.preset }}"
+      - name: Test
+        run: "ctest --preset ${{ matrix.preset }}"
+      - name: GUI smoke test
+        run: "./build/${{ matrix.preset }}/mini-remote-client --smoke-test"
